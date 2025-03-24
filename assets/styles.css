@@ -1,0 +1,46 @@
+/* General body style */
+body {
+    font-size: 16px;
+}
+.responsive-img {
+    height: 100px ;
+}
+
+/* Responsive celular deitado */
+@media (max-width: 940px) {
+    body {
+        font-size: 16px;
+    }
+    h3 {
+        font-size: 16px; /* Further adjust for very small screens */
+    }
+    h5 {
+        font-size: 14px; /* Further adjust for very small screens */
+    }
+    .badge {
+        font-size: 20px; /* Further adjust badge size */
+    }
+    .responsive-img {
+        height: 50px;
+    }
+}
+
+/*celular em pe*/
+@media (max-width: 480px) {
+    body {
+        font-size: 16px;
+    }
+    h3 {
+        font-size: 16px; /* Further adjust for very small screens */
+    }
+    h5 {
+        font-size: 14px; /* Further adjust for very small screens */
+    }
+    .badge {
+        font-size: 20px; /* Further adjust badge size */
+    }
+    .responsive-img {
+        height: 50px;
+    }
+
+}

@@ -1,0 +1,202 @@
+
+atalhos do dia a dia
+
+ssh aurelio@158.220.127.126
+password: {s5E36lP
+
+cd agrosul
+source myvenv/bin/activate
+
+uwsgi --socket 0.0.0.0:8050 --protocol=http -w wsgi:app
+http://158.220.127.126:8050/
+
+pkill -f uwsgi -9
+
+
+publicar online:
+sudo systemctl stop agrosul
+sudo systemctl start agrosul
+
+--------------------------------
+Como fazer o upload de um dash para publicar online
+--------------------------------
+
+no command window
+ssh aurelio@158.220.127.126
+password: {s5E36lP
+
+Antes de instalar os aplicativos temos que ativar o ambiente virtual
+
+Criar uma pasta no home
+$ mkdir ~/myproject
+$ cd ~/myproject
+
+Criar o ambiente virtual para o projeto, isso instala o python e o pip na pasta myprojectenv
+$ python3 -m venv myprojectenv
+
+ativar:
+cd agrosul
+source myvenv/bin/activate
+
+
+
+Ao rodar o comando acima o prompt muda, indicando que esta no ambiente
+
+Instalar os aplicativos
+$ pip install wheel
+$ pip install uwsgi flask
+
+$ pip install "todos os pacotes necessaries"
+pip install pandas
+pip install dash
+pip install plotly
+pip install datetime
+pip install dash_bootstrap_components
+
+Para sair do ambiente virtual
+$ deactivate
+
+
+Cada projeto tem sua própria instalação e pelo menos três arquivos como na pasta "test"
+test.py
+wsgi.py
+test.ini
+
+
+--------------------------------------------------------------
+o mais facil é fazer tudo no pc local e copiar para a nuvem utilizando o comando:
+scp -r source_dir aurelio@158.220.127.126:new_directory/
+
+para baixar um arquivo do servidor:
+scp -r aurelio@158.220.127.126:agrosul/agrosul_01.py C:/Users/aurel/Dropbox/THEIA/supervisório/agrosul_old/agrosul_v01.py
+
+scp -r aurelio@158.220.127.126:agrosul/assets/styles.css C:/Users/aurel/Dropbox/THEIA/supervisório/agrosul_old/styles_v0.css
+
+para baixar uma pasta do servidor:
+scp -r aurelio@158.220.127.126:agrosul/assets C:/Users/aurel/Dropbox/THEIA/agrosul_old
+------------------------------------------------------------
+
+-------
+test.py
+-------
+from flask import Flask
+app = Flask(__name__)
+@app.route("/")
+def hello():
+    return "<h1 style='color:blue'>Hello There!</h1>"
+if __name__ == "__main__":
+    app.run(host='127.0.0.1')
+
+-------
+wsgi.py
+-------
+from test import app
+if __name__ == "__main__":
+    app.run()
+
+--------
+test.ini
+--------
+[uwsgi]
+module = wsgi:app
+
+master = true
+processes = 5
+
+socket = test.sock
+chmod-socket = 660
+vacuum = true
+
+die-on-term = true
+-----------
+agrosul.ini
+-----------
+[uwsgi]
+chdir=/home/agrosul/
+wsgi-file=wsgi.py
+module = wsgi:app
+virtualenv=/home/agrosul/myvenv/
+
+master = true
+processes = 5
+
+socket = agrosul.sock
+chmod-socket = 660
+vacuum = true
+
+die-on-term = true
+
+-------------------
+reference for the above ini file:
+https://github.com/glmontano/pyAppNotes
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+então eu rodo python3 wsgi.py
+Dash is running on http://127.0.0.1:8050/
+
+ * Serving Flask app 'agrosul'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:8050
+Press CTRL+C to quit
+
+
+
+até aí ok, mas tem que funcionar assim:
+
+uwsgi --socket 0.0.0.0:8050 --protocol=http -w wsgi:app
+
+http://158.220.127.126:8050/
+
+*********** o que funcionou foi *******
+
+from flask import Flask
+from dash import Dash, html
+
+# Create the Flask server instance
+app = Flask(__name__)
+
+# Create the Dash app using the Flask server instance
+dash_app = Dash(__name__, server=app, url_base_pathname='/')
+
+# Define the layout for the Dash app
+dash_app.layout = html.Div([
+    html.H1("Hello from Dash!", style={'color': 'blue'}),
+    html.P("This is a Dash layout running on top of Flask.")
+])
+
+# Define a basic route for Flask
+@app.route("/")
+def hello():
+    return redirect("/")
+
+#Optional: Run the server if executed directly (useful for debugging locally)
+if __name__ == "__main__":
+    app.run(host='127.0.0.1', port=8050)
+
+****** FIM
+
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+tutorial postgres
+
+ https://www.devmedia.com.br/como-criar-uma-conexao-em-postgresql-com-python/34079
+
+
+conn = psycopg2.connect(database = "mytestdb", 
+                        user = "postgres", 
+                        host= 'localhost',
+                        password = "theia@24",
+                        port = 5432)
+
+
+
+
+
+
+
+

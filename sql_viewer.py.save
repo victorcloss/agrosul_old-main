@@ -1,0 +1,60 @@
+
+import psycopg2
+from psycopg2 import sql
+import pandas as pd
+
+conn = psycopg2.connect(database = "mytestdb", 
+                        user = "postgres", 
+                        host= 'localhost',
+                        password = "theia@24",
+                        port = 5432)
+
+
+cursor = conn.cursor()
+
+# Fetch all table names from the database
+
+cursor.execute("""SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public'""")
+tables = cursor.fetchall()
+
+
+
+
+# Print all table names and create DataFrame for each table
+for table in tables:
+    table_name = table[0]
+
+    # Create a DataFrame for the current table
+    df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
+
+    print(f"\nTable {str(table_name)}")
+    print(f" - length= {str(len(df))}, \n - columns= {str(df.columns)}")
+
+    # Print the DataFrame
+    #print(df)
+
+# Query to get the number of rows for the specified table
+row_count_query = sql.SQL(
+    """
+    SELECT COUNT(*)
+    FROM {}
+    """
+).format(sql.Identifier(table_name))
+
+# Execute the query to count rows
+cursor.execute(row_count_query)
+row_count = cursor.fetchone()[0]
+
+# Print the results
+print(f"Table '{table_name}' has {column_count} columns and {row_count} rows.")
+
+# Print some of the data for today
+from datetime import date, datetime, timedelta
+######## Today
+today = datetime.now().strftime('%Y-%m-%d')
+
+
+# Close the cursor and disconnect from the database
+cursor.close()
+conn.close()

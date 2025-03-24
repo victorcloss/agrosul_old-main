@@ -1,0 +1,239 @@
+Metadata-Version: 2.1
+Name: pgsql
+Version: 2.2
+Summary: PostgreSQL client library for Python 3
+Author-email: Antti Heinonen <antti@heinonen.cc>
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: SQL
+Classifier: Topic :: Database :: Front-Ends
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+**pgsql** is a simple PostgreSQL client library for Python 3. Written in pure
+Python and not having any dependencies, it should run on just about any
+implementation of the language.
+
+**Limitations:**
+- Library-specific API — no support for DB-API 2.0
+- Connections cannot be shared across threads/processes
+- No support for COPY between client and server
+
+## Installation
+
+```bash
+
+$ pip install pgsql
+
+```
+
+## A Long-Winded Example
+
+```python
+
+import pgsql
+
+# connect using a Unix domain socket
+db = pgsql.Connection("/var/run/postgresql/.s.PGSQL.5432")
+
+# execute multiple statements in a single call
+db.execute("""
+    CREATE TABLE people (name TEXT UNIQUE, year INT);
+    INSERT INTO people VALUES ('Veronica', 1986);
+""")
+
+# execute a statement and iterate through the resulting rows
+for person in db("SELECT * FROM people"):
+    print(person)
+
+# close the connection
+db.close()
+
+# connect using a TCP socket, TLS and password authentication
+# connections support the with statement
+with pgsql.Connection(("localhost", 5432), "user", "password", tls = True) as db:
+    # ... as do transactions and prepared statements
+    with db.transaction():
+        with db.prepare("INSERT INTO people VALUES ($1, $2)") as insert_person:
+            for person in ("Wallace", 1986), ("Keith", 1959), ("Lianne", 1960):
+                insert_person(*person)
+
+    # transactions can also be done using .begin(), .commit() and .rollback() manually
+    db.begin()
+    db("INSERT INTO people VALUES ($1, $2)", "Backup", 1999)
+    db.rollback()
+
+# connect using a TCP socket, TLS and certificate authentication
+with pgsql.Connection(("localhost", 5432), tls_cert = "postgres.pem") as db:
+    # prepare a statement
+    people = db.prepare("SELECT * FROM people")
+    # execute the statement and iterate through the resulting rows
+    for person in people():
+        # rows are dataclass instances, columns their attributes
+        print(person.name, person.year)
+    people.close()
+
+    # return all rows
+    with db.prepare("SELECT * FROM people WHERE year > $1") as people_born_after:
+        print(list(people_born_after(1980))) # mutable
+        print(tuple(people_born_after(1980))) # immutable
+
+    # return a single row
+    with db.prepare("SELECT * FROM people WHERE name = $1") as person:
+        print(person("Veronica").row())
+
+    # return a single column
+    with db.prepare("SELECT year FROM people WHERE name = $1") as year:
+        print(year("Veronica").col())
+
+    # show the execution plan of a statement
+    print(db.explain("SELECT * FROM people"))
+
+```
+
+```python
+
+Row(name='Veronica', year=1986)
+Veronica 1986
+Wallace 1986
+Keith 1959
+Lianne 1960
+[Row(name='Veronica', year=1986), Row(name='Wallace', year=1986)]
+(Row(name='Veronica', year=1986), Row(name='Wallace', year=1986))
+Row(name='Veronica', year=1986)
+1986
+[
+  {
+    "Plan": {
+      "Node Type": "Seq Scan",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Relation Name": "people",
+      "Alias": "people",
+      "Startup Cost": 0.00,
+      "Total Cost": 22.70,
+      "Plan Rows": 1270,
+      "Plan Width": 36
+    }
+  }
+]
+
+```
+
+## Row Factories
+
+Rows are returned as dataclass instances. When preparing a statement, it's
+possible to set a base for the dataclass generated for that particular
+statement. Defining fields for the base is not necessary, but if defined,
+their order must match that of the columns returned by the statement.
+
+```python
+
+from dataclasses import dataclass, field
+
+# create a base dataclass
+@dataclass
+class Person:
+    age: int = field(init = False)
+    def __post_init__(self):
+        self.age = 2004 - self.year
+
+# return rows as Persons
+with db.prepare("SELECT name, year FROM people", Person) as people:
+    for person in people():
+        print(person)
+
+```
+
+```python
+
+Person(age=18, name='Veronica', year=1986)
+Person(age=18, name='Wallace', year=1986)
+Person(age=45, name='Keith', year=1959)
+Person(age=44, name='Lianne', year=1960)
+
+```
+
+## Type Binding
+
+| PostgreSQL			  | Python		|
+| ----------------------- | -----------	|
+| integers, serials, oid  | int			|
+| numeric, decimal		  | float		|
+| boolean				  | bool		|
+
+Type binding is defined in the `pgsql.types` dictionary, where keys
+refer to [pg_type][1] row identifiers and values are callables used for type
+conversion. By default, all [non-numeric][2], [non-boolean][3] types are
+returned as strings. Extending the dictionary is simple – for example, to
+automatically decode returned [json][4] data:
+
+[1]: https://www.postgresql.org/docs/current/catalog-pg-type.html
+[2]: https://www.postgresql.org/docs/current/datatype-numeric.html
+[3]: https://www.postgresql.org/docs/current/datatype-boolean.html
+[4]: https://www.postgresql.org/docs/current/datatype-json.html
+
+```python
+
+import pgsql
+import json
+
+# SELECT oid FROM pg_type WHERE typname = 'json' returns 114
+pgsql.types[114] = json.loads
+
+```
+
+Type binding only applies to retrieved data. Sent data (statement arguments)
+must have a string representation conforming to the lexical structure of
+constants in PostgreSQL.
+
+## Exceptions
+
+Caught protocol errors and server error messages raise an exception indicating
+the severity of the error:
+- `pgsql.Error` caused the current command to abort
+- `pgsql.Fatal` caused the current session to abort
+- `pgsql.Panic` caused all sessions to abort
+
+Server error messages include an [error code][5]. Server notice messages
+are ignored.
+
+[5]: https://www.postgresql.org/docs/current/errcodes-appendix.html
+
+## Changes
+
+### 2.2 (2024-02-14)
+
+- Fixed the handling of null values (thank you Colin Putney)
+
+### 2.1 (2024-01-14)
+
+- Fixed the handling of asynchronous messages
+- Fixed the minimum Python version requirement to 3.11
+
+### 2.0 (2024-01-09)
+
+- Added support for non-Unix platforms
+- Added support for TLS and certificate authentication
+- Added support for SCRAM-SHA-256 authentication
+- Added `pgsql.Fatal` and `pgsql.Panic` exception classes
+- Added support for executing multiple statements in a single call
+- Added support for showing the execution plan of a statement
+- Changed the representation of rows from tuples to dataclasses
+- Changed the return type of one-time statements from list to iterator
+- Changed the data retrieving methods of `pgsql.Statement`
+- Extended `pgsql.types` to cover more numeric types
+- Fixed the handling of ErrorResponse, NoticeResponse and EmptyQueryResponse messages
+
+### 1.2 (2019-10-27)
+
+- Updated the package description
+
+### 1.1 (2014-03-26)
+
+- Added one-time statement execution to `pgsql.Connection`
